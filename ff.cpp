@@ -1,6 +1,6 @@
 /******************************************************************************
 
-    FindFile - Copyright (C) 2013 Mundi Software.
+    FindFile - Copyright (C) 1997 - 2018 Mundi Software.
 
     FindFile is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published
@@ -59,6 +59,7 @@ bool  accept_f = false, // request confirmation
       watch_f  = true,  // watch the location
       dirs_f   = false, // search only directories
       subdir_f = false, // search in subdirectories
+      others_f = false, // reversed search
       relat_f  = false, // display relative paths
       brief_f  = false, // display brief information
       test_f   = false, // test - do not execute commands
@@ -147,13 +148,14 @@ void syntax()
 {
 	fprintf(stderr,
 		"\n"
-		"Mundi Software 1997..2016 - FindFile - Freeware Version 4.2\n"
+		"Mundi Software 1997..2018 - FindFile - Freeware Version 4.3\n"
 		"Syntax: ff [-option] [[disc:][directory\\] | variable:] ... [mask] ... [; command] ...\n"
 		"Options:\n"
 		"   h   help (this information)    q   quiet execute\n"
 		"   a   display attributes         b   brief format of information\n"
-		"   v   only visible               d   search only directory names\n"
-		"   s   search in subdirectories   x   Search also directory names\n"
+		"   v   only visible               d   search only directories\n"
+		"   s   search in subdirectories   x   Search also directories\n"
+		"   n   search for files / directories that do not match the mask\n"
 		"   l   do not search in links     i   display summary information\n"
 		"   t   do not execute commands    p   request confirmation\n"
 		"   w   do not watch the location  r   display relative paths\n"
@@ -291,28 +293,57 @@ void execute(WIN32_FIND_DATA *fd) // filename in 'path' variable
 	}
 }
 
+HANDLE findnext(HANDLE h, WIN32_FIND_DATA *d)
+{
+	while (((h == NULL) && ((h = FindFirstFile(path, d)) != INVALID_HANDLE_VALUE)) || ((h != INVALID_HANDLE_VALUE) && FindNextFile(h, d)))
+	{	
+		if ((d->dwFileAttributes & FA_HIDSYS) && !(flags & FA_HIDSYS)) continue;
+		if ((d->dwFileAttributes & FA_SUBDIR) && !(flags & FA_SUBDIR)) continue;
+		if ( d->dwFileAttributes & FA_DEVICE) continue;
+		if ( d->dwFileAttributes & FA_SUBDIR)
+		{
+			if ((*(ulong*)(d->cFileName) & 0x00FFFFFF) == 0x00002E2E) continue; // ".."
+			if ((*(ulong*)(d->cFileName) & 0x0000FFFF) == 0x0000002E) continue; // "."
+		}
+		else
+		{
+			if (dirs_f) continue;
+		}
+		return h;
+	}
+	if (h != INVALID_HANDLE_VALUE)
+		FindClose(h);
+	return INVALID_HANDLE_VALUE;
+}
+
+void findreversed(char *p) // p: file name in path
+{
+	HANDLE          mh, fh = NULL;
+	WIN32_FIND_DATA md, fd;
+	mh = findnext(NULL, &md);
+	strcpy(p, "*");
+	while ((fh = findnext(fh, &fd)) != INVALID_HANDLE_VALUE)
+	{
+		if (mh != INVALID_HANDLE_VALUE && strcmp(md.cFileName, fd.cFileName) == 0)
+		{
+			mh = findnext(mh, &md);
+			continue;
+		}
+		xfiles++; xbytes += fd.nFileSizeLow;
+		strcpy(p, fd.cFileName);
+		execute(&fd);
+	}
+}
+
 void findfile(char *p) // p: filename in path
 {
-	         HANDLE fh;
+	HANDLE          fh = NULL;
 	WIN32_FIND_DATA fd;
-	if ((fh = FindFirstFile(path, &fd)) != INVALID_HANDLE_VALUE)
+	while ((fh = findnext(fh, &fd)) != INVALID_HANDLE_VALUE)
 	{
-		do
-		{
-			if ((fd.dwFileAttributes & FA_HIDSYS) && !(flags & FA_HIDSYS)) continue;
-			if ((fd.dwFileAttributes & FA_SUBDIR) && !(flags & FA_SUBDIR)) continue;
-			if ( fd.dwFileAttributes & FA_SUBDIR)
-			{
-				if ((*(ulong*)(fd.cFileName) & 0x00FFFFFF) == 0x00002E2E) continue; // ".."
-				if ((*(ulong*)(fd.cFileName) & 0x0000FFFF) == 0x0000002E) continue; // "."
-			}
-			else if (fd.dwFileAttributes & FA_DEVICE) continue;
-			else if (dirs_f)                          continue;
-			xfiles++; xbytes += fd.nFileSizeLow;
-			strcpy(p, fd.cFileName);
-			execute(&fd);
-		} while (FindNextFile(fh, &fd) && xfiles < flimit);
-		FindClose(fh);
+		xfiles++; xbytes += fd.nFileSizeLow;
+		strcpy(p, fd.cFileName);
+		execute(&fd);
 	}
 }
 
@@ -326,7 +357,8 @@ void findloop()
 	for (int i = 0; i < files && xfiles < flimit; i++)
 	{
 		strcpy(p, fn[i]);
-		findfile(p);
+		if (others_f) findreversed(p);
+		else          findfile(p);
 	}
 	if (xfiles > xf)
 	{
@@ -453,10 +485,12 @@ char*parseoptions(char *s)
 		case 'A': attrib_f = true; break;
 		case 'B': brief_f  = true; break;
 		case 'I': info_f   = true; break;
-		case 'P': accept_f = query_f = true; break;
+		case 'P': accept_f =
+		          query_f  = true; break;
 		case 'Q': quiet_f  = true; break;
 		case 'S': subdir_f = true; break;
 		case 'R': relat_f  = true; break;
+		case 'N': others_f = true; break;
 		case 'V': flags   &= ~FA_HIDSYS; break;
 		case 'D': dirs_f   = true;
 		case 'X': flags   |=  FA_SUBDIR; break;
