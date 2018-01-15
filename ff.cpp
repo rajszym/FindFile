@@ -25,8 +25,6 @@
 int _CRT_glob = 0;
 #endif
 
-// #pragma setlocale("polish_poland")
-
 typedef unsigned char  byte;
 typedef unsigned short word;
 typedef unsigned int   uint;
@@ -53,20 +51,20 @@ typedef unsigned long ulong;
 
 #define _MAX_CMD  (1024)
 
-bool  accept_f = false, // ¿¹danie potwierdzania plików
-      query_f  = false, // pytanie o plik?
-      attrib_f = false, // wyœwietlanie atrybutów
-      info_f   = false, // wyœwietlanie informacji
-      quiet_f  = false, // ciche wykonanie programu
-      watch_f  = true,  // obserwowanie lokacji
-      dirs_f   = false, // szuka tylko katalogów
-      subdir_f = false, // szuka równie¿ w podkatalogach
-      others_f = false, // wyszukiwanie odwrócone
-      relat_f  = false, // wyœwietla œcie¿ki wzglêdne
-      brief_f  = false, // wyœwietlanie skróconej informacji
-      test_f   = false, // test - nie wykonuje poleceñ
-      error_f  = false, // b³¹d pliku lub katalogu
-      break_f  = false; // przerwanie w trybie potwierdzania plików
+bool  accept_f = false, // request confirmation
+      query_f  = false, // ask for a file
+      attrib_f = false, // display attributes
+      info_f   = false, // dispaly summary information
+      quiet_f  = false, // quiet
+      watch_f  = true,  // watch the location
+      dirs_f   = false, // search only directories
+      subdir_f = false, // search in subdirectories
+      others_f = false, // reversed search
+      relat_f  = false, // display relative paths
+      brief_f  = false, // display brief information
+      test_f   = false, // test - do not execute commands
+      error_f  = false, // file or directory error
+      break_f  = false; // break the confirmation
 
 uint  flags = FA_FLAGS;
 
@@ -151,24 +149,24 @@ void syntax()
 	fprintf(stderr,
 		"\n"
 		"Mundi Software 1997..2018 - FindFile - Freeware Version 4.3\n"
-		"Sk³adnia: ff [-opcje] [[dysk:][katalog\\] | zmienna:] ... [maska] ... [; polecenie] ...\n"
-		"Opcje:\n"
-		"   h   pomoc (ta informacja)      q   ciche wykonanie programu\n"
-		"   a   poka¿ atrybuty plików      b   skrócony format informacji\n"
-		"   v   tylko pliki widoczne       d   szukaj tylko katalogów\n"
-		"   s   szukaj w podkatalogach     x   szukaj tak¿e katalogów\n"
-		"   n   wyszukiwanie plików / katalogów nie pasuj¹cych do maski\n"
-		"   l   nie szukaj w linkach       i   poka¿ podsumowanie\n"
-		"   t   nie wykonuj poleceñ (test) p   ¿¹daj potwierdzenia\n"
-		"   w   nie obserwuj lokacji       r   poka¿ lokacjê wzglêdn¹\n"
-		"   f.. limit plików (domyœlnie 1) e.. limit b³êdów dysku lub katalogu\n"
-		"U¿ywanie nazw znalezionych plików w poleceniach:\n"
-		"   !*  pe³na œcie¿ka dostêpu\n"
-		"   !@  dysk i katalog             !$  nazwa pliku z rozszerzeniem\n"
-		"   !:  dysk                       !\\  nazwa katalogu\n"
-		"   !   nazwa pliku                .!  rozszerzenie nazwy pliku\n"
-		"   !#  numer pliku                !!  znak '!'\n"
-		"Przyk³ady:\n"
+		"Syntax: ff [-option] [[disc:][directory\\] | variable:] ... [mask] ... [; command] ...\n"
+		"Options:\n"
+		"   h   help (this information)    q   quiet execute\n"
+		"   a   display attributes         b   brief format of information\n"
+		"   v   only visible               d   search only directories\n"
+		"   s   search in subdirectories   x   Search also directories\n"
+		"   n   search for files / directories that do not match the mask\n"
+		"   l   do not search in links     i   display summary information\n"
+		"   t   do not execute commands    p   request confirmation\n"
+		"   w   do not watch the location  r   display relative paths\n"
+		"   f.. file limit (default 1)     e.. disk or directory error limit\n"
+		"Using found filenames in commands:\n"
+		"   !*  full path\n"
+		"   !@  disc and directory         !$  filename with extension\n"
+		"   !:  disc                       !\\  directory\n"
+		"   !   filename                   .!  extension\n"
+		"   !#  file number                !!  character '!'\n"
+		"Examples:\n"
 		"   ff -sip \\*.bak *.tmp ; del \"!:\\!\\!.!\"\n"
 		"   ff -sq *.tmp ; echo !#: !* ; attrib -R -S -H \"!*\" ; del \"!*\"\n"
 		"   ff -sq \\win*\\ \\prog*\\ *.txt ; type \"!*\" >> info.txt\n"
@@ -181,14 +179,14 @@ void syntax()
 void errorinfo(const char *s, char *i)
 {
 	if ( elimit) elimit--;
-	if (!elimit || info_f) fprintf(stderr, "B³¹d: %s \"%s\"\n", s, i);
+	if (!elimit || info_f) fprintf(stderr, "Error: %s \"%s\"\n", s, i);
 	if (!elimit) exit(EXIT_FAILURE);
 	error_f = true;
 }
 
 void errorexit(const char *s)
 {
-	fprintf(stderr, "B³¹d: %s\n", s);
+	fprintf(stderr, "Error: %s\n", s);
 	exit(EXIT_FAILURE);
 }
 
@@ -222,13 +220,13 @@ bool acceptfile(WIN32_FIND_DATA *fd) // nazwa pliku w zmiennej 'path'
 {
 	if (attrib_f) putattributes(fd, false);
 	putpath(false);
-	fprintf(stderr, "\nPotwierdzenie (Tak/Nie/Wszystkie/Przerwij) ?");
+	fprintf(stderr, "\nConfirmation (Yes/No/All/Break) ?");
 	for (;;) switch (toupper(getch()))
 	{
-		case 'P': flimit = xfiles; break_f = true;
+		case 'B': flimit = xfiles; break_f = true;
 		case 'N': dellines(); return false;
-		case 'W': query_f = false;
-		case 'T': dellines(); return true;
+		case 'A': query_f = false;
+		case 'Y': dellines(); return true;
 	}
 }
 
@@ -276,7 +274,7 @@ void createcommand(char *cmd)
 	}
 }
 
-void execute(WIN32_FIND_DATA *fd) // nazwa pliku w zmiennej 'path'
+void execute(WIN32_FIND_DATA *fd) // filename in 'path' variable
 {
 	if (accept_f)
 	{
@@ -448,7 +446,7 @@ void findpath()
 	   (relat_f || GetFullPathName(path, _MAX_PATH, path, 0)))
 		findloop();
 	else
-		errorinfo("nieprawid³owo okreœlony katalog", path);
+		errorinfo("incorrect path", path);
 }
 
 void findproc()
@@ -463,7 +461,7 @@ bool varloop(char *p)
 {
 	char *s;
 	    strtok(p, ":");
-	s = getenv(p); if (!s) { errorinfo("nieznana zmienna", p); strins(p, ':'); return false; }
+	s = getenv(p); if (!s) { errorinfo("unknown variable", p); strins(p, ':'); return false; }
 	p = strend(p); if (*++p != '\\') *--p = '\\';
 	while (strtok(s, ";"))
 	{
@@ -526,9 +524,9 @@ char*parseoptions(char *s)
 		case 'W': watch_f  = false; break;
 		case 'F': flimit   = isdigit(*++s) ? getnum(&s) : 1; s--; break;
 		case 'E': elimit   = isdigit(*++s) ? getnum(&s) : 1; s--; break;
-		default : errorexit("nieznana opcja");
+		default : errorexit("unknown option");
 	}
-	if (!e) errorexit("brak opcji");
+	if (!e) errorexit("no options");
 	return s;
 }
 
@@ -587,12 +585,9 @@ void processinput()
 	}
 }
 
-const char *_end_(ulong x, const char *s1, const char *s2, const char *s3)
+const char *_end_(ulong x, const char *s1, const char *s2)
 {
-	if (x == 0)                                 return s3;
-	if (x == 1)                                 return s1;
-	if ((x - 2) % 10 < 3 && (x / 10) % 10 != 1) return s2;
-	                                            return s3;
+	return (x == 1) ? s1 : s2;
 }
 
 void showinfo()
@@ -600,45 +595,43 @@ void showinfo()
 		              fprintf(stderr, "\n");
 	if (!xfiles)
 	{
-		              fprintf(stderr, "Nie znaleziono plików");
+		              fprintf(stderr, "No files found");
 	}
 	else
 	{
-		              fprintf(stderr, "Znaleziono %lu plik%s", xfiles, _end_(xfiles, "",  "i",   "ów" ));
-		if (subdir_f) fprintf(stderr, " w %lu katalog%s",      xdirs,  _end_(xdirs,  "u", "ach", "ach"));
-		              fprintf(stderr, " (%lu bajt%s)",         xbytes, _end_(xbytes, "",  "y",   "ów" ));
+		              fprintf(stderr, "%lu file%s found",   xfiles, _end_(xfiles, "",  "s" ));
+		if (subdir_f) fprintf(stderr, " in %lu director%s", xdirs,  _end_(xdirs,  "y", "ies"));
+		              fprintf(stderr, " (%lu byte%s)",      xbytes, _end_(xbytes, "",  "s" ));
 		if (accept_f)
 		{
 			if (!xacceptfiles)
 			{
-		              fprintf(stderr, "; nie potwierdzono plików");
+		              fprintf(stderr, "; no files confirmed");
 			}
 			else if (xacceptfiles == xfiles)
 			{
-		              fprintf(stderr, "; potwierdzono%s", _end_(xacceptfiles, "", " wszystkie", " wszystkie"));
+		              fprintf(stderr, "; %s files confirmed", xacceptfiles ? "all" : "no");
 			}
 			else
 			{
-		              fprintf(stderr, "; potwierdzono %lu plik%s", xacceptfiles, _end_(xacceptfiles, "", "i", "ów"));
-		              fprintf(stderr, " (%lu bajt%s)",             xacceptbytes, _end_(xacceptbytes, "", "y", "ów"));
+		              fprintf(stderr, "; %lu file%s confirmed", xacceptfiles, _end_(xacceptfiles, "", "s"));
+		              fprintf(stderr, " (%lu byte%s)",          xacceptbytes, _end_(xacceptbytes, "", "s"));
 			}
 		}
 	}
 	if (break_f)
 	{
-		              fprintf(stderr, "; wyszukiwanie przerwane");
+		              fprintf(stderr, "; interrupted search");
 	}
 	else if (xfiles == flimit)
 	{
-		              fprintf(stderr, "; wynik ograniczony limitem");
+		              fprintf(stderr, "; limited search");
 	}
 		              fprintf(stderr, "\n");
 }
 
 int main()
 {
-	SetConsoleCP(1250);
-	SetConsoleOutputCP(1250);
 	getscreensize();
 	parsecommandline(GetCommandLine());
 	if (dirs)    searchf();
