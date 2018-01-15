@@ -318,32 +318,54 @@ HANDLE findnext(HANDLE h, WIN32_FIND_DATA *d)
 
 void findreversed(char *p) // p: file name in path
 {
-	HANDLE          mh, fh = NULL;
-	WIN32_FIND_DATA md, fd;
-	mh = findnext(NULL, &md);
-	strcpy(p, "*");
-	while ((fh = findnext(fh, &fd)) != INVALID_HANDLE_VALUE)
+	            int i;
+	         HANDLE ah, fh;
+	WIN32_FIND_DATA ad, fd;
+	strcpy(p, "*"); ah = NULL;
+	while ((ah = findnext(ah, &ad)) != INVALID_HANDLE_VALUE && xfiles < flimit)
 	{
-		if (mh != INVALID_HANDLE_VALUE && strcmp(md.cFileName, fd.cFileName) == 0)
+		for (i = 0; i < files; i++)
 		{
-			mh = findnext(mh, &md);
-			continue;
+			strcpy(p, fn[i]); fh = NULL;
+			while ((fh = findnext(fh, &fd)) != INVALID_HANDLE_VALUE)
+			{
+				if (strcmp(ad.cFileName, fd.cFileName) == 0)
+					break;
+			}
+			if (fh != INVALID_HANDLE_VALUE)
+			{
+				FindClose(fh);
+				break;
+			}
 		}
-		xfiles++; xbytes += fd.nFileSizeLow;
-		strcpy(p, fd.cFileName);
+		if (i < files)
+			continue;
+		xfiles++; xbytes += ad.nFileSizeLow;
+		strcpy(p, ad.cFileName);
 		execute(&fd);
 	}
+	if (ah != INVALID_HANDLE_VALUE)
+		FindClose(ah);
 }
 
 void findfile(char *p) // p: filename in path
 {
-	HANDLE          fh = NULL;
+	         HANDLE fh;
 	WIN32_FIND_DATA fd;
-	while ((fh = findnext(fh, &fd)) != INVALID_HANDLE_VALUE)
+	for (int i = 0; i < files; i++)
 	{
-		xfiles++; xbytes += fd.nFileSizeLow;
-		strcpy(p, fd.cFileName);
-		execute(&fd);
+		strcpy(p, fn[i]); fh = NULL;
+		while ((fh = findnext(fh, &fd)) != INVALID_HANDLE_VALUE && xfiles < flimit)
+		{
+			xfiles++; xbytes += fd.nFileSizeLow;
+			strcpy(p, fd.cFileName);
+			execute(&fd);
+		}
+		if (fh != INVALID_HANDLE_VALUE)
+		{
+			FindClose(fh);
+			break;
+		}
 	}
 }
 
@@ -354,12 +376,8 @@ void findloop()
 	char  *p = strend(path);
 	ulong xf = xfiles, xb = xbytes;
 	if (!quiet_f && watch_f) { clreol(); putpath(false); }
-	for (int i = 0; i < files && xfiles < flimit; i++)
-	{
-		strcpy(p, fn[i]);
-		if (others_f) findreversed(p);
-		else          findfile(p);
-	}
+	if (others_f) findreversed(p);
+	else          findfile(p);
 	if (xfiles > xf)
 	{
 		xdirs++;
