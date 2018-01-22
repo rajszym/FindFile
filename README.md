@@ -18,7 +18,7 @@ Options:
 
 Using found filenames in commands:
 ```
-!*  full path
+   !*  full path
    !@  disc and directory         !$  filename with extension
    !:  disc                       !\  directory
    !   filename                   .!  extension
