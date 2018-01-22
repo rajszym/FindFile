@@ -36,4 +36,5 @@ ff -sq \win*\ \prog*\ *.txt ; type "!*" >> info.txt
 dir /b | sort | ff /a
 dir /b > tmp & ff < tmp & del tmp
 ff -a PATH: | sort /+18 | more
+ff /sn *.c *.cpp *.h *.hpp
 ```
