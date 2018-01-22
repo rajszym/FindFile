@@ -3,9 +3,9 @@ File search utility for Windows
 
 Syntax: ff [-option] [[disc:][directory\] | variable:] ... [mask] ... [; command] ...
 
-'Options:
-'   h   help (this information)    q   quiet execution
-'   a   display attributes         b   brief format of information
+|Options:
+|   h   help (this information)    q   quiet execution
+   a   display attributes         b   brief format of information
    v   only visible               d   search only directories
    s   search in subdirectories   x   search also directories
    n   reversed search (files/directories that do not match the mask)
