@@ -1,7 +1,10 @@
 # FindFile
 File search utility for Windows
 
-Syntax: ff [-option] [[disc:][directory\] | variable:] ... [mask] ... [; command] ...
+Syntax:
+```
+ff [-option] [[disc:][directory\] | variable:] ... [mask] ... [; command] ...
+```
 
 Options:
 ```
