@@ -173,7 +173,7 @@ void syntax()
 		"   dir /b | sort | ff /a\n"
 		"   dir /b > tmp & ff < tmp & del tmp\n"
 		"   ff -a PATH: | sort /+18 | more\n"
-		"   ff /sn *.c *.cpp *.h *.hpp *.ld\n");
+		"   ff /sn *.c *.cpp *.h *.hpp\n");
 	exit(EXIT_FAILURE);
 }
 
