@@ -55,10 +55,10 @@ bool  accept_f = false, // request confirmation
       query_f  = false, // ask for a file
       attrib_f = false, // display attributes
       info_f   = false, // dispaly summary information
-      quiet_f  = false, // quiet
+      quiet_f  = false, // quiet execution
       watch_f  = true,  // watch the location
       dirs_f   = false, // search only directories
-      subdir_f = false, // search in subdirectories
+      subdir_f = false, // search also in subdirectories
       others_f = false, // reversed search
       relat_f  = false, // display relative paths
       brief_f  = false, // display brief information
@@ -151,11 +151,11 @@ void syntax()
 		"Mundi Software 1997..2018 - FindFile - Freeware Version 4.3\n"
 		"Syntax: ff [-option] [[disc:][directory\\] | variable:] ... [mask] ... [; command] ...\n"
 		"Options:\n"
-		"   h   help (this information)    q   quiet execute\n"
+		"   h   help (this information)    q   quiet execution\n"
 		"   a   display attributes         b   brief format of information\n"
 		"   v   only visible               d   search only directories\n"
-		"   s   search in subdirectories   x   Search also directories\n"
-		"   n   search for files / directories that do not match the mask\n"
+		"   s   search in subdirectories   x   search also directories\n"
+		"   n   reversed search (files/directories that do not match the mask)\n"
 		"   l   do not search in links     i   display summary information\n"
 		"   t   do not execute commands    p   request confirmation\n"
 		"   w   do not watch the location  r   display relative paths\n"
@@ -221,13 +221,14 @@ bool acceptfile(WIN32_FIND_DATA *fd) // nazwa pliku w zmiennej 'path'
 	if (attrib_f) putattributes(fd, false);
 	putpath(false);
 	fprintf(stderr, "\nConfirmation (Yes/No/All/Break) ?");
-	for (;;) switch (toupper(getch()))
-	{
+	for (;;)
+		switch (toupper(getch()))
+		{
 		case 'B': flimit = xfiles; break_f = true;
 		case 'N': dellines(); return false;
 		case 'A': query_f = false;
 		case 'Y': dellines(); return true;
-	}
+		}
 }
 
 void createcommand(char *cmd)
@@ -237,33 +238,31 @@ void createcommand(char *cmd)
 	for (dot = false, *temp = 0, s = cmd; *s; s++)
 	{
 		if (*s == '!')
-		{
 			switch (*++s)
 			{
-				case '!': strcat(temp, "!");   break;
-				case ':': strcat(temp, drive); break;
-				case '\\':
-					strcat(temp, dir);
-					if (dir[1] && strchr("\t ,:;", s[1])) strdec(temp);
-					break;
-				case '*': strcat(temp, path); break;
-				case '@':
-					strcat(temp, drive);
-					strcat(temp, dir);
-					if (dir[1] || s[1] == '\\') strdec(temp);
-					break;
-				case '$':
-					strcat(temp, file);
-					strcat(temp, ext);
-					break;
-				case '#': sprintf(strend(temp), "%lu", xfiles); break;
-				default:
-					s--;
-					if (dot) strcat(strdec(temp), ext);
-					else     strcat(temp, file);
-					break;
+			case '!': strcat(temp, "!");   break;
+			case ':': strcat(temp, drive); break;
+			case '\\':
+				strcat(temp, dir);
+				if (dir[1] && strchr("\t ,:;", s[1])) strdec(temp);
+				break;
+			case '*': strcat(temp, path); break;
+			case '@':
+				strcat(temp, drive);
+				strcat(temp, dir);
+				if (dir[1] || s[1] == '\\') strdec(temp);
+				break;
+			case '$':
+				strcat(temp, file);
+				strcat(temp, ext);
+				break;
+			case '#': sprintf(strend(temp), "%lu", xfiles); break;
+			default:
+				s--;
+				if (dot) strcat(strdec(temp), ext);
+				else     strcat(temp, file);
+				break;
 			}
-		}
 		else strinc(temp, *s);
 		dot = (*s == '.');
 	}
@@ -315,7 +314,7 @@ bool findvalid(WIN32_FIND_DATA *fd)
 
 bool filevalid(char *p, char *f)
 {
-	         HANDLE fh;
+	HANDLE fh;
 	WIN32_FIND_DATA fd;
 	for (int i = 0; i < files; i++)
 	{
@@ -323,11 +322,12 @@ bool filevalid(char *p, char *f)
 		fh = FindFirstFile(path, &fd);
 		if (fh != INVALID_HANDLE_VALUE)
 		{
-			do if (findvalid(&fd) && strcmp(fd.cFileName, f) == 0)
-			{
-				FindClose(fh);
-				return false;
-			}
+			do
+				if (findvalid(&fd) && strcmp(fd.cFileName, f) == 0)
+				{
+					FindClose(fh);
+					return false;
+				}
 			while (FindNextFile(fh, &fd));
 			FindClose(fh);
 		}
@@ -337,18 +337,19 @@ bool filevalid(char *p, char *f)
 
 void findreversed(char *p) // p: nazwa pliku w zmiennej 'path'
 {
-	         HANDLE fh;
+	HANDLE fh;
 	WIN32_FIND_DATA fd;
 	strcpy(p, "*");
 	fh = FindFirstFile(path, &fd);
 	if (fh != INVALID_HANDLE_VALUE)
 	{
-		do if (findvalid(&fd) && filevalid(p, fd.cFileName))
-		{
-			xfiles++; xbytes += fd.nFileSizeLow;
-			strcpy(p, fd.cFileName);
-			execute(&fd);
-		}
+		do
+			if (findvalid(&fd) && filevalid(p, fd.cFileName))
+			{
+				xfiles++; xbytes += fd.nFileSizeLow;
+				strcpy(p, fd.cFileName);
+				execute(&fd);
+			}
 		while (FindNextFile(fh, &fd));
 		FindClose(fh);
 	}
@@ -356,7 +357,7 @@ void findreversed(char *p) // p: nazwa pliku w zmiennej 'path'
 
 void findfile(char *p) // p: nazwa pliku w zmiennej 'path'
 {
-	         HANDLE fh;
+	HANDLE fh;
 	WIN32_FIND_DATA fd;
 	for (int i = 0; i < files; i++)
 	{
@@ -364,12 +365,13 @@ void findfile(char *p) // p: nazwa pliku w zmiennej 'path'
 		fh = FindFirstFile(path, &fd);
 		if (fh != INVALID_HANDLE_VALUE)
 		{
-			do if (findvalid(&fd))
-			{
-				xfiles++; xbytes += fd.nFileSizeLow;
-				strcpy(p, fd.cFileName);
-				execute(&fd);
-			}
+			do
+				if (findvalid(&fd))
+				{
+					xfiles++; xbytes += fd.nFileSizeLow;
+					strcpy(p, fd.cFileName);
+					execute(&fd);
+				}
 			while (FindNextFile(fh, &fd));
 			FindClose(fh);
 		}
@@ -378,7 +380,7 @@ void findfile(char *p) // p: nazwa pliku w zmiennej 'path'
 
 void findloop()
 {
-	         HANDLE fh;
+	HANDLE fh;
 	WIN32_FIND_DATA fd;
 	char  *p = strend(path);
 	ulong xf = xfiles, xb = xbytes;
@@ -399,17 +401,19 @@ void findloop()
 		strcpy(p, "*");
 		if ((fh = FindFirstFile(path, &fd)) != INVALID_HANDLE_VALUE)
 		{
-			do if (fd.dwFileAttributes & FA_SUBDIR)
-			{
-				if ((*(ulong*)(fd.cFileName) & 0x00FFFFFF) == 0x00002E2E) continue; // ".."
-				if ((*(ulong*)(fd.cFileName) & 0x0000FFFF) == 0x0000002E) continue; // "."
+			do
+				if (fd.dwFileAttributes & FA_SUBDIR)
+				{
+					if ((*(ulong*)(fd.cFileName) & 0x00FFFFFF) == 0x00002E2E) continue; // ".."
+					if ((*(ulong*)(fd.cFileName) & 0x0000FFFF) == 0x0000002E) continue; // "."
 
-				if ((fd.dwFileAttributes & FA_REPARS) && !(flags & FA_REPARS)) continue;
+					if ((fd.dwFileAttributes & FA_REPARS) && !(flags & FA_REPARS)) continue;
 
-				strcpy(p, fd.cFileName);
-				strinc(p, '\\');
-				findloop();
-			} while (FindNextFile(fh, &fd) && xfiles != flimit);
+					strcpy(p, fd.cFileName);
+					strinc(p, '\\');
+					findloop();
+				}
+			while (FindNextFile(fh, &fd) && xfiles != flimit);
 			FindClose(fh);
 		}
 	}
@@ -418,7 +422,7 @@ void findloop()
 
 void findpath()
 {
-	         HANDLE fh;
+	HANDLE fh;
 	WIN32_FIND_DATA fd;
 	char temp[_MAX_PATH], *p, *q, *t;
 
@@ -430,13 +434,15 @@ void findpath()
 		if ((fh = FindFirstFile(temp, &fd)) != INVALID_HANDLE_VALUE)
 		{
 			*p = 0; *q = '\\';
-			do if ((fd.dwFileAttributes & FA_SUBDIR) && *fd.cFileName != '.')
-			{
-				strcpy(path, temp);
-				strcat(path, fd.cFileName);
-				strcat(path, q);
-				findpath();
-			} while (FindNextFile(fh, &fd));
+			do
+				if ((fd.dwFileAttributes & FA_SUBDIR) && *fd.cFileName != '.')
+				{
+					strcpy(path, temp);
+					strcat(path, fd.cFileName);
+					strcat(path, q);
+					findpath();
+				}
+			while (FindNextFile(fh, &fd));
 			FindClose(fh);
 			return;
 		}
@@ -485,7 +491,8 @@ void searchf()
 			if (!*++s) continue;
 			fn[files++] = strcpy(temp, s); *s = 0; i++;
 		}
-		for (dirs = i; i < k; i++) fn[files++] = dn[i];
+		for (dirs = i; i < k; i++)
+			fn[files++] = dn[i];
 	}
 
 	if (!dirs ) dn[dirs++ ] = (char*)"";
@@ -503,8 +510,9 @@ char*parseoptions(char *s)
 {
 	bool e;
 	if (*s != '-' && *s != '/') return s;
-	for (e = false; !strchr(" \t;", *++s); e = true) switch (toupper(*s))
-	{
+	for (e = false; !strchr(" \t;", *++s); e = true)
+		switch (toupper(*s))
+		{
 		case '?':
 		case 'H': syntax();
 		case 'A': attrib_f = true; break;
@@ -525,7 +533,7 @@ char*parseoptions(char *s)
 		case 'F': flimit   = isdigit(*++s) ? getnum(&s) : 1; s--; break;
 		case 'E': elimit   = isdigit(*++s) ? getnum(&s) : 1; s--; break;
 		default : errorexit("unknown option");
-	}
+		}
 	if (!e) errorexit("no options");
 	return s;
 }
@@ -563,11 +571,13 @@ void parsecommandline(char *s)
 		while   (isspace(*s)) s++;
 	}
 
-	if (*s) for (cmds = i = 0, e = false; *s; s++) switch (*s)
-	{
-		case ';' : if (!e) { *s = 0; cmd[cmds++] = s + 1; } break;
-		case '\"': e = !e;
-	}
+	if (*s)
+		for (cmds = i = 0, e = false; *s; s++)
+			switch (*s)
+			{
+			case ';' : if (!e) { *s = 0; cmd[cmds++] = s + 1; } break;
+			case '\"': e = !e;
+			}
 }
 
 void processinput()
