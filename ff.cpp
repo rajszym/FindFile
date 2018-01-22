@@ -172,7 +172,8 @@ void syntax()
 		"   ff -sq \\win*\\ \\prog*\\ *.txt ; type \"!*\" >> info.txt\n"
 		"   dir /b | sort | ff /a\n"
 		"   dir /b > tmp & ff < tmp & del tmp\n"
-		"   ff -a PATH: | sort /+18 | more\n");
+		"   ff -a PATH: | sort /+18 | more\n"
+		"   ff /sn *.c *.cpp *.h *.hpp *.ld\n");
 	exit(EXIT_FAILURE);
 }
 
