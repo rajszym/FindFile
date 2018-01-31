@@ -3,7 +3,7 @@ File search utility for Windows
 
 Syntax:
 ```
-ff [-option] [[disc:][directory\] | variable:] ... [mask] ... [; command] ...
+ff [-options | --] [[disc:][directory\] | variable:] ... [mask] ... [; command] ...
 ```
 
 Options:
