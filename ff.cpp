@@ -149,7 +149,7 @@ void syntax()
 	fprintf(stderr,
 		"\n"
 		"Mundi Software 1997..2018 - FindFile - Freeware Version 4.4\n"
-		"Syntax: ff [-option | --] [[disc:][directory\\] | variable:] ... [mask] ... [; command] ...\n"
+		"Syntax: ff [-options | --] [[disc:][directory\\] | variable:] ... [mask] ... [; command] ...\n"
 		"Options:\n"
 		"   h   help (this information)    q   quiet execution\n"
 		"   a   display attributes         b   brief format of information\n"
