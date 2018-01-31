@@ -102,9 +102,11 @@ inline char* strdec (char *s) { *strlast(s) = 0; return s; }
 
 inline char* strinc (char *s, char c) { *(word*)strend(s) = (word)(byte)c; return s; }
 
-inline char* strins (char *s, char c) { s = strend(s); *s = c; return s + 1; } // para do strtok / strrep
+inline char* strins (char *s, char c) { s = strend(s); *s = c; return s + 1; }
 
-inline char* strrep (char *s, char c, char r) {	for (char*p = s; p = strchr(p, c); *p = r); return s; }
+inline char* strrep (char *s, char c, char r) {	for (char *p = s; p = strchr(p, c); *p = r); return s; }
+
+inline char* strtrim(char *s) { while (isspace(*s)) s++; for (char *p = strlast(s); isspace(*p); *p-- = 0); return s; }
 
 void getscreensize()
 {
@@ -232,11 +234,12 @@ bool acceptfile(WIN32_FIND_DATA *fd) // nazwa pliku w zmiennej 'path'
 		}
 }
 
-void createcommand(char *cmd)
+void createcommand(char *s)
 {
-	char temp[_MAX_CMD], *s;
 	bool dot;
-	for (dot = false, *temp = 0, s = cmd; *s; s++)
+	char temp[_MAX_CMD];
+	s = strtrim(s);
+	for (dot = false, *temp = 0; *s; s++)
 	{
 		if (*s == '!')
 			switch (*++s)
@@ -245,7 +248,7 @@ void createcommand(char *cmd)
 			case ':': strcat(temp, drive); break;
 			case '\\':
 				strcat(temp, dir);
-				if (dir[1] && strchr("\t ,:;", s[1])) strdec(temp);
+				if (dir[1] && strchr(" \t,:;", s[1])) strdec(temp);
 				break;
 			case '*': strcat(temp, path); break;
 			case '@':
@@ -264,7 +267,8 @@ void createcommand(char *cmd)
 				else     strcat(temp, file);
 				break;
 			}
-		else strinc(temp, *s);
+		else
+			strinc(temp, *s);
 		dot = (*s == '.');
 	}
 	if (*temp)
