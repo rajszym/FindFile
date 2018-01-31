@@ -148,8 +148,8 @@ void syntax()
 {
 	fprintf(stderr,
 		"\n"
-		"Mundi Software 1997..2018 - FindFile - Freeware Version 4.3\n"
-		"Syntax: ff [-option] [[disc:][directory\\] | variable:] ... [mask] ... [; command] ...\n"
+		"Mundi Software 1997..2018 - FindFile - Freeware Version 4.4\n"
+		"Syntax: ff [-option | --] [[disc:][directory\\] | variable:] ... [mask] ... [; command] ...\n"
 		"Options:\n"
 		"   h   help (this information)    q   quiet execution\n"
 		"   a   display attributes         b   brief format of information\n"
@@ -509,9 +509,9 @@ void searchf()
 
 char*parseoptions(char *s)
 {
-	bool e;
+	bool f;
 	if (*s != '-' && *s != '/') return s;
-	for (e = false; !strchr(" \t;", *++s); e = true)
+	for (f = true; !strchr(" \t;", *++s); f = false)
 		switch (toupper(*s))
 		{
 		case '?':
@@ -533,9 +533,10 @@ char*parseoptions(char *s)
 		case 'W': watch_f  = false; break;
 		case 'F': flimit   = isdigit(*++s) ? getnum(&s) : 1; s--; break;
 		case 'E': elimit   = isdigit(*++s) ? getnum(&s) : 1; s--; break;
+		case '-': if (f && strchr(" \t;", *++s)) return s;
 		default : errorexit("unknown option");
 		}
-	if (!e) errorexit("no options");
+	if (f) errorexit("no options");
 	return s;
 }
 
@@ -617,11 +618,11 @@ void showinfo()
 		{
 			if (!xacceptfiles)
 			{
-		              fprintf(stderr, "; no files confirmed");
+		              fprintf(stderr, "; %sconfirmed",         (xfiles == 1) ? "not " : "no files ");
 			}
 			else if (xacceptfiles == xfiles)
 			{
-		              fprintf(stderr, "; %s files confirmed", xacceptfiles ? "all" : "no");
+		              fprintf(stderr, "; %sconfirmed",         (xfiles == 1) ? "" : "all files ");
 			}
 			else
 			{
