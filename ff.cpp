@@ -1,6 +1,6 @@
 /******************************************************************************
 
-    FindFile - Copyright (C) 1997 - 2018 Mundi Software.
+    FindFile - Copyright (C) 1997 - 2021 Mundi Software.
 
     FindFile is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published
@@ -15,11 +15,13 @@
     You should have received a copy of the GNU General Public License
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 
- ******************************************************************************/
+******************************************************************************/
 
 #include <windows.h>
-#include <stdio.h>
+#include <string.h>
 #include <ctype.h>
+#include <cstdio>
+#include <algorithm>
 
 #ifdef __GNUC__
 int _CRT_glob = 0;
@@ -28,7 +30,7 @@ int _CRT_glob = 0;
 typedef unsigned char  byte;
 typedef unsigned short word;
 typedef unsigned int   uint;
-typedef unsigned long ulong;
+typedef unsigned long  ulong;
 
 #define FA_RDONLY FILE_ATTRIBUTE_READONLY            /* 0x00000001 */
 #define FA_HIDDEN FILE_ATTRIBUTE_HIDDEN              /* 0x00000002 */
@@ -58,29 +60,30 @@ bool  accept_f = false, // request confirmation
       quiet_f  = false, // quiet execution
       watch_f  = true,  // watch the location
       dirs_f   = false, // search only directories
-      subdir_f = false, // search also in subdirectories
+      subdir_f = false, // recurse subdirectories
       others_f = false, // reversed search
       relat_f  = false, // display relative paths
       brief_f  = false, // display brief information
       test_f   = false, // test - do not execute commands
       error_f  = false, // file or directory error
-      break_f  = false; // break the confirmation
+      break_f  = false, // break the confirmation
+      unix_f   = false; // unix path style
 
 uint  flags = FA_FLAGS;
 
 uint  screenwidth  = 0,
       screenheight = 0;
 
-char *fn [64] = {0},
-     *dn [64] = {0},
-     *cmd[64] = {0};
+char *fn [64] = {},
+     *dn [64] = {},
+     *cmd[64] = {};
 
 uint  files = 0,
       dirs  = 0,
       cmds  = 0;
 
-ulong elimit = (ulong)-1,
-      flimit = (ulong)-1;
+ulong elimit = -1UL,
+      flimit = -1UL;
 
 ulong xfiles       = 0,
       xdirs        = 0,
@@ -88,11 +91,11 @@ ulong xfiles       = 0,
       xacceptfiles = 0,
       xacceptbytes = 0;
 
-char  path [_MAX_PATH]  = {0},
-      drive[_MAX_DRIVE] = {0},
-      dir  [_MAX_DIR]   = {0},
-      file [_MAX_FNAME] = {0},
-      ext  [_MAX_EXT]   = {0};
+char  path [_MAX_PATH]  = { 0 },
+      drive[_MAX_DRIVE] = { 0 },
+      dir  [_MAX_DIR]   = { 0 },
+      file [_MAX_FNAME] = { 0 },
+      ext  [_MAX_EXT]   = { 0 };
 
 inline char* strend (char *s) { s = strchr(s, 0); return s; }
 
@@ -104,7 +107,7 @@ inline char* strinc (char *s, char c) { *(word*)strend(s) = (word)(byte)c; retur
 
 inline char* strins (char *s, char c) { s = strend(s); *s = c; return s + 1; }
 
-inline char* strrep (char *s, char c, char r) {	for (char *p = s; p = strchr(p, c); *p = r); return s; }
+inline char* strrep (char *s, char c, char r) {	for (char *p = s; (p = strchr(p, c)); *p = r); return s; }
 
 inline char* strtrim(char *s) { while (isspace(*s)) s++; for (char *p = strlast(s); isspace(*p); *p-- = 0); return s; }
 
@@ -113,25 +116,25 @@ void getscreensize()
 	CONSOLE_SCREEN_BUFFER_INFO c;
 	HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
 	GetConsoleScreenBufferInfo(h, &c);
-	screenwidth  = c.dwSize.X;
-	screenheight = c.dwSize.Y;
+	screenwidth  = static_cast<uint>(c.dwSize.X);
+	screenheight = static_cast<uint>(c.dwSize.Y);
 }
 
 void clreol()
 {
-	DWORD x;
 	CONSOLE_SCREEN_BUFFER_INFO c;
 	HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
-	GetConsoleScreenBufferInfo(h, &c); x = c.dwSize.X - c.dwCursorPosition.X;
+	GetConsoleScreenBufferInfo(h, &c);
+	DWORD x = static_cast<DWORD>(c.dwSize.X - c.dwCursorPosition.X);
 	FillConsoleOutputCharacter(h, ' ', x, c.dwCursorPosition, &x);
 }
 
 void dellines()
 {
-	DWORD x;
 	CONSOLE_SCREEN_BUFFER_INFO c;
 	HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
-	GetConsoleScreenBufferInfo(h, &c); x = c.dwSize.X * 2;
+	GetConsoleScreenBufferInfo(h, &c);
+	DWORD x = static_cast<DWORD>(c.dwSize.X * 2);
 	c.dwCursorPosition.X = 0; c.dwCursorPosition.Y -= 1;
 	SetConsoleCursorPosition(h, c.dwCursorPosition);
 	FillConsoleOutputCharacter(h, ' ', x, c.dwCursorPosition, &x);
@@ -142,7 +145,7 @@ char getch()
 	DWORD x;
 	INPUT_RECORD i;
 	HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
-	while(!ReadConsoleInput(h, &i, 1, &x) || i.EventType != KEY_EVENT || !i.Event.KeyEvent.bKeyDown);
+	while (!ReadConsoleInput(h, &i, 1, &x) || i.EventType != KEY_EVENT || !i.Event.KeyEvent.bKeyDown);
 	return i.Event.KeyEvent.uChar.AsciiChar;
 }
 
@@ -150,13 +153,13 @@ void syntax()
 {
 	fprintf(stderr,
 		"\n"
-		"Mundi Software 1997..2018 - FindFile - Freeware Version 4.4\n"
+		"Mundi Software 1997..2021 - FindFile - Freeware Version 4.6\n"
 		"Syntax: ff [-options | --] [[disc:][directory\\] | variable:] ... [mask] ... [; command] ...\n"
 		"Options:\n"
 		"   h   help (this information)    q   quiet execution\n"
 		"   a   display attributes         b   brief format of information\n"
 		"   v   only visible               d   search only directories\n"
-		"   s   search in subdirectories   x   search also directories\n"
+		"   s   recurse subdirectories     x   search also directories\n"
 		"   n   reversed search (files/directories that do not match the mask)\n"
 		"   l   do not search in links     i   display summary information\n"
 		"   t   do not execute commands    p   request confirmation\n"
@@ -175,7 +178,8 @@ void syntax()
 		"   dir /b | sort | ff /a\n"
 		"   dir /b > tmp & ff < tmp & del tmp\n"
 		"   ff -a PATH: | sort /+18 | more\n"
-		"   ff /sn *.c *.cpp *.h *.hpp\n");
+		"   ff /sn *.c *.cpp *.h *.hpp\n"
+	);
 	exit(EXIT_FAILURE);
 }
 
@@ -195,7 +199,7 @@ void errorexit(const char *s)
 
 void putattributes(WIN32_FIND_DATA *fd, bool v = true)
 {
-	int  x = fd->dwFileAttributes;
+	DWORD x = fd->dwFileAttributes;
 	char a[] = "rhsvda            "; if (x & FA_REPARS) a[4] = 'l';
 	for (int i = 0; i < 6; i++, x >>= 1) if (!(x & 1)) a[i] = '-';
 	if (!(fd->dwFileAttributes & FA_SUBDIR)) sprintf(a + 7, "%10lu ", fd->nFileSizeLow);
@@ -205,17 +209,24 @@ void putattributes(WIN32_FIND_DATA *fd, bool v = true)
 
 void putpath(bool v = true)
 {
-	uint n = strlen(path) + 1;
+	char p[_MAX_PATH]; strcpy(p, path);
+	size_t n = strlen(p);
+	if (unix_f)
+	{
+		std::replace(p, p + n, '\\', '/');
+		if (n >= 2 && p[1] == ':') { p[1] = p[0]; p[0] = '/'; }
+	}
+	++n;
 	if (v && (attrib_f || brief_f)) n += 18;
 	if (n > screenwidth) n = n - screenwidth + 3; else n = 0;
-	if (v) printf(        "...%s\n" + (n ? 0 : 3), path + n);
-	else  fprintf(stderr, "...%s\r" + (n ? 0 : 3), path + n);
+	if (v) printf(        "...%s\n" + (n ? 0 : 3), p + n);
+	else  fprintf(stderr, "...%s\r" + (n ? 0 : 3), p + n);
 }
 
 ulong getnum(char **s)
 {
-	ulong  l = 0;
-	do l = 10 * l + (*(*s)++ - '0'); while(isdigit(**s));
+	ulong l = 0;
+	do l = 10 * l + (ulong)(*(*s)++ - '0'); while (isdigit(**s));
 	return l;
 }
 
@@ -227,10 +238,10 @@ bool acceptfile(WIN32_FIND_DATA *fd) // nazwa pliku w zmiennej 'path'
 	for (;;)
 		switch (toupper(getch()))
 		{
-		case 'B': flimit = xfiles; break_f = true;
-		case 'N': dellines(); return false;
-		case 'A': query_f = false;
-		case 'Y': dellines(); return true;
+		case 'P': flimit = xfiles; break_f = true; [[fallthrough]];
+		case 'N': dellines();        return false;
+		case 'W': query_f = false;                 [[fallthrough]];
+		case 'T': dellines();        return  true;
 		}
 }
 
@@ -246,6 +257,7 @@ void createcommand(char *s)
 			{
 			case '!': strcat(temp, "!");   break;
 			case ':': strcat(temp, drive); break;
+			case '/': [[fallthrough]];
 			case '\\':
 				strcat(temp, dir);
 				if (dir[1] && strchr(" \t,:;", s[1])) strdec(temp);
@@ -291,7 +303,7 @@ void execute(WIN32_FIND_DATA *fd) // filename in 'path' variable
 		putpath();
 	}
 	_splitpath(path, drive, dir, file, ext);
-	for (int i = 0; i < cmds; i++)
+	for (uint i = 0; i < cmds; i++)
 	{
 		createcommand(cmd[i]);
 	}
@@ -321,7 +333,7 @@ bool filevalid(char *p, char *f)
 {
 	HANDLE fh;
 	WIN32_FIND_DATA fd;
-	for (int i = 0; i < files; i++)
+	for (uint i = 0; i < files; i++)
 	{
 		strcpy(p, fn[i]);
 		fh = FindFirstFile(path, &fd);
@@ -364,7 +376,7 @@ void findfile(char *p) // p: nazwa pliku w zmiennej 'path'
 {
 	HANDLE fh;
 	WIN32_FIND_DATA fd;
-	for (int i = 0; i < files; i++)
+	for (uint i = 0; i < files; i++)
 	{
 		strcpy(p, fn[i]);
 		fh = FindFirstFile(path, &fd);
@@ -397,7 +409,7 @@ void findloop()
 		xdirs++;
 		if (!quiet_f && brief_f)
 		{
-			printf("%6lu%c%10lu ", xfiles - xf, xfiles == flimit ? '?': ' ', xbytes - xb);
+			printf("%6lu%c%10lu ", xfiles - xf, xfiles == flimit ? '?' : ' ', xbytes - xb);
 			*p = 0; putpath();
 		}
 	}
@@ -431,11 +443,11 @@ void findpath()
 	WIN32_FIND_DATA fd;
 	char temp[_MAX_PATH], *p, *q, *t;
 
-	if (t = strpbrk(path, "*?"))
+	if ((t = strpbrk(path, "*?")))
 	{
-		strcpy(temp, path); t += temp - path;
+		strcpy(temp, path); t += (uintptr_t)temp - (uintptr_t)path;
 		p = strchr(temp, ':'); if (!p++) p = temp;
-		while ((q = strchr(p, '\\')) < t) p = q + 1; *q = 0;
+		while ((q = strchr(p, '\\')) < t) { p = q + 1; } *q = 0;
 		if ((fh = FindFirstFile(temp, &fd)) != INVALID_HANDLE_VALUE)
 		{
 			*p = 0; *q = '\\';
@@ -454,7 +466,7 @@ void findpath()
 	}
 
 	if (GetLongPathName(path, path, _MAX_PATH) &&
-	   (relat_f || GetFullPathName(path, _MAX_PATH, path, 0)))
+	   (relat_f || GetFullPathName(path, _MAX_PATH, path, nullptr)))
 		findloop();
 	else
 		errorinfo("incorrect path", path);
@@ -483,12 +495,27 @@ bool varloop(char *p)
 	return true;
 }
 
+void setcursor(BOOL visible)
+{
+	static CONSOLE_CURSOR_INFO cci = {};
+	static HANDLE Cout = nullptr;
+	if (Cout == NULL)
+	{
+		Cout = GetStdHandle(STD_OUTPUT_HANDLE);
+		GetConsoleCursorInfo(Cout, &cci);
+	}
+	cci.bVisible = visible;
+	SetConsoleCursorInfo(Cout, &cci);
+}
+
 void searchf()
 {
-	int  i, k = dirs;
+	uint i, k = dirs;
 	char temp[_MAX_PATH], *s;
 
-	for (*temp = i = 0; i < k; i++)
+	setcursor(FALSE);
+
+	for (*temp = 0, i = 0; i < k; i++)
 	{
 		strrep(dn[i], '/', '\\');
 		if ((s = strrchr(dn[i], '\\')) || (s = strchr(dn[i], ':')))
@@ -509,6 +536,8 @@ void searchf()
 		strcpy(path, dn[i]);
 		findproc();
 	}
+
+	setcursor(TRUE);
 }
 
 char*parseoptions(char *s)
@@ -519,7 +548,7 @@ char*parseoptions(char *s)
 		switch (toupper(*s))
 		{
 		case '?':
-		case 'H': syntax();
+		case 'H': syntax(); [[fallthrough]];
 		case 'A': attrib_f = true; break;
 		case 'B': brief_f  = true; break;
 		case 'I': info_f   = true; break;
@@ -529,15 +558,16 @@ char*parseoptions(char *s)
 		case 'S': subdir_f = true; break;
 		case 'R': relat_f  = true; break;
 		case 'N': others_f = true; break;
-		case 'V': flags   &= ~FA_HIDSYS; break;
-		case 'D': dirs_f   = true;
-		case 'X': flags   |=  FA_SUBDIR; break;
-		case 'L': flags   &= ~FA_REPARS; break;
+		case 'V': flags   &= ~(uint)FA_HIDSYS; break;
+		case 'D': dirs_f   = true; [[fallthrough]];
+		case 'X': flags   |=  (uint)FA_SUBDIR; break;
+		case 'L': flags   &= ~(uint)FA_REPARS; break;
 		case 'T': test_f   = true; break;
 		case 'W': watch_f  = false; break;
 		case 'F': flimit   = isdigit(*++s) ? getnum(&s) : 1; s--; break;
 		case 'E': elimit   = isdigit(*++s) ? getnum(&s) : 1; s--; break;
-		case '-': if (f && strchr(" \t;", *++s)) return s;
+		case 'U': unix_f   = true; break;
+		case '-': if (f && strchr(" \t;", *++s)) return s; [[fallthrough]];
 		default : errorexit("unknown option");
 		}
 	if (f) errorexit("no options");
@@ -569,7 +599,7 @@ void parsecommandline(char *s)
 		dn[dirs++] = s;
 		for (e = false, i = 0; !strchr(e ? "" : " \t;", s[i]); s++)
 		{
-			if (s[i] == '\"' ) { e = !e; s--; i++; continue; } 
+			if (s[i] == '\"' ) { e = !e; s--; i++; continue; }
 			if (i) s[0] = s[i];
 		}
 		if      (i)           { *s = 0; s += i; }
@@ -578,7 +608,7 @@ void parsecommandline(char *s)
 	}
 
 	if (*s)
-		for (cmds = i = 0, e = false; *s; s++)
+		for (cmds = 0, i = 0, e = false; *s; s++)
 			switch (*s)
 			{
 			case ';' : if (!e) { *s = 0; cmd[cmds++] = s + 1; } break;
@@ -615,9 +645,9 @@ void showinfo()
 	}
 	else
 	{
-		              fprintf(stderr, "%lu file%s found",   xfiles, _end_(xfiles, "",  "s" ));
+		{}            fprintf(stderr, "%lu file%s found",   xfiles, _end_(xfiles, "",  "s" ));
 		if (subdir_f) fprintf(stderr, " in %lu director%s", xdirs,  _end_(xdirs,  "y", "ies"));
-		              fprintf(stderr, " (%lu byte%s)",      xbytes, _end_(xbytes, "",  "s" ));
+		{}            fprintf(stderr, " (%lu byte%s)",      xbytes, _end_(xbytes, "",  "s" ));
 		if (accept_f)
 		{
 			if (!xacceptfiles)
